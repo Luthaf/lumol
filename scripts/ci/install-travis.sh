@@ -14,6 +14,10 @@ else
     cd $TRAVIS_BUILD_DIR
 fi
 
+if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then
+    brew install python
+fi
+
 cd $TRAVIS_BUILD_DIR
 
 pip install --user -r doc/requirements.txt
