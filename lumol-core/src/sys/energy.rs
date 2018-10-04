@@ -43,14 +43,13 @@ impl<'a> EnergyEvaluator<'a> {
     /// Compute the energy of all the pairs in the system
     pub fn pairs(&self) -> f64 {
         let energies = (0..self.system.size()).into_par_iter().map(|i| {
-            let mut local_energy = 0.0;
-
+            let mut energy = 0.0;
             for j in (i + 1)..self.system.size() {
                 let r = self.system.nearest_image(i, j).norm();
                 let path = self.system.bond_path(i, j);
-                local_energy += self.pair(path, r, i, j);
+                energy += self.pair(path, r, i, j);
             }
-            local_energy
+            return energy;
         });
         return energies.sum();
     }
@@ -88,15 +87,16 @@ impl<'a> EnergyEvaluator<'a> {
 
     /// Compute the energy of all the bonds in the system
     pub fn bonds(&self) -> f64 {
-        let mut energy = 0.0;
-        for molecule in self.system.molecules() {
+        let energies = self.system.molecules().par_bridge().map(|molecule| {
+            let mut energy = 0.0;
             for bond in molecule.bonds() {
                 let (i, j) = (bond.i(), bond.j());
                 let r = self.system.nearest_image(i, j).norm();
                 energy += self.bond(r, i, j);
             }
-        }
-        return energy;
+            return energy;
+        });
+        return energies.sum();
     }
 
     /// Compute the energy associated with the angle `i, j, k` at angle `theta`
@@ -111,15 +111,16 @@ impl<'a> EnergyEvaluator<'a> {
 
     /// Compute the energy of all the angles in the system
     pub fn angles(&self) -> f64 {
-        let mut energy = 0.0;
-        for molecule in self.system.molecules() {
+        let energies = self.system.molecules().par_bridge().map(|molecule| {
+            let mut energy = 0.0;
             for angle in molecule.angles() {
                 let (i, j, k) = (angle.i(), angle.j(), angle.k());
                 let theta = self.system.angle(i, j, k);
                 energy += self.angle(theta, i, j, k);
             }
-        }
-        return energy;
+            return energy;
+        });
+        return energies.sum();
     }
 
     /// Compute the energy associated with the dihedral angle `i, j, k, m` at
@@ -135,15 +136,16 @@ impl<'a> EnergyEvaluator<'a> {
 
     /// Compute the energy of all the dihedral angles in the system
     pub fn dihedrals(&self) -> f64 {
-        let mut energy = 0.0;
-        for molecule in self.system.molecules() {
+        let energies = self.system.molecules().par_bridge().map(|molecule| {
+            let mut energy = 0.0;
             for dihedral in molecule.dihedrals() {
                 let (i, j, k, m) = (dihedral.i(), dihedral.j(), dihedral.k(), dihedral.m());
                 let phi = self.system.dihedral(i, j, k, m);
                 energy += self.dihedral(phi, i, j, k, m);
             }
-        }
-        return energy;
+            return energy;
+        });
+        return energies.sum();
     }
 
     /// Compute the energy of the electrostatic interactions
@@ -199,7 +201,6 @@ mod tests {
             5.0,
         );
         pair.enable_tail_corrections();
-
         system.add_pair_potential(("F", "F"), pair);
 
         system.add_bond_potential(

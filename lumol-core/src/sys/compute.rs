@@ -54,12 +54,8 @@ impl Compute for Forces {
             forces[i] += force_i;
         });
 
-        // At this point all the forces are computed, but the results are
-        // scattered across all thread local Vecs, here we gather them.
-        let mut forces = vec![Vector3D::zero(); natoms];
-        thread_local_forces.sum_into(&mut forces);
-
-        for molecule in system.molecules() {
+        system.molecules().par_bridge().for_each(|molecule| {
+            let mut forces = thread_local_forces.borrow_mut();
             for bond in molecule.bonds() {
                 let (i, j) = (bond.i(), bond.j());
                 let d = system.nearest_image(i, j);
@@ -94,7 +90,12 @@ impl Compute for Forces {
                     forces[m] += force * d4;
                 }
             }
-        }
+        });
+
+        // At this point all the forces are computed, but the results are
+        // scattered across all thread local Vecs, here we gather them.
+        let mut forces = vec![Vector3D::zero(); natoms];
+        thread_local_forces.sum_into(&mut forces);
 
         if let Some(coulomb) = system.coulomb_potential() {
             coulomb.forces(system, &mut forces);
