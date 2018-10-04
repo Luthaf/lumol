@@ -85,20 +85,6 @@ impl<'a> EnergyEvaluator<'a> {
         return energy;
     }
 
-    /// Compute the energy of all the bonds in the system
-    pub fn bonds(&self) -> f64 {
-        let energies = self.system.molecules().par_bridge().map(|molecule| {
-            let mut energy = 0.0;
-            for bond in molecule.bonds() {
-                let (i, j) = (bond.i(), bond.j());
-                let r = self.system.nearest_image(i, j).norm();
-                energy += self.bond(r, i, j);
-            }
-            return energy;
-        });
-        return energies.sum();
-    }
-
     /// Compute the energy associated with the angle `i, j, k` at angle `theta`
     #[inline]
     pub fn angle(&self, theta: f64, i: usize, j: usize, k: usize) -> f64 {
@@ -107,20 +93,6 @@ impl<'a> EnergyEvaluator<'a> {
             energy += potential.energy(theta);
         }
         return energy;
-    }
-
-    /// Compute the energy of all the angles in the system
-    pub fn angles(&self) -> f64 {
-        let energies = self.system.molecules().par_bridge().map(|molecule| {
-            let mut energy = 0.0;
-            for angle in molecule.angles() {
-                let (i, j, k) = (angle.i(), angle.j(), angle.k());
-                let theta = self.system.angle(i, j, k);
-                energy += self.angle(theta, i, j, k);
-            }
-            return energy;
-        });
-        return energies.sum();
     }
 
     /// Compute the energy associated with the dihedral angle `i, j, k, m` at
@@ -134,10 +106,22 @@ impl<'a> EnergyEvaluator<'a> {
         return energy;
     }
 
-    /// Compute the energy of all the dihedral angles in the system
-    pub fn dihedrals(&self) -> f64 {
+    /// Compute the energy of all the bonds/angles/dihedrals in the system
+    pub fn bonded(&self) -> f64 {
         let energies = self.system.molecules().par_bridge().map(|molecule| {
             let mut energy = 0.0;
+            for bond in molecule.bonds() {
+                let (i, j) = (bond.i(), bond.j());
+                let r = self.system.nearest_image(i, j).norm();
+                energy += self.bond(r, i, j);
+            }
+
+            for angle in molecule.angles() {
+                let (i, j, k) = (angle.i(), angle.j(), angle.k());
+                let theta = self.system.angle(i, j, k);
+                energy += self.angle(theta, i, j, k);
+            }
+
             for dihedral in molecule.dihedrals() {
                 let (i, j, k, m) = (dihedral.i(), dihedral.j(), dihedral.k(), dihedral.m());
                 let phi = self.system.dihedral(i, j, k, m);
@@ -251,23 +235,9 @@ mod tests {
     }
 
     #[test]
-    fn bonds() {
+    fn bonded() {
         let system = testing_system();
         let evaluator = EnergyEvaluator::new(&system);
-        assert_ulps_eq!(evaluator.bonds(), units::from(150.0, "kJ/mol").unwrap());
-    }
-
-    #[test]
-    fn angles() {
-        let system = testing_system();
-        let evaluator = EnergyEvaluator::new(&system);
-        assert_ulps_eq!(evaluator.angles(), units::from(400.0, "kJ/mol").unwrap());
-    }
-
-    #[test]
-    fn dihedrals() {
-        let system = testing_system();
-        let evaluator = EnergyEvaluator::new(&system);
-        assert_ulps_eq!(evaluator.dihedrals(), units::from(1250.0, "kJ/mol").unwrap(), max_ulps = 15);
+        assert_ulps_eq!(evaluator.bonded(), units::from(150.0 + 400.0 + 1250.0, "kJ/mol").unwrap());
     }
 }

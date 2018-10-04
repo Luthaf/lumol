@@ -28,12 +28,8 @@ pub struct EnergyCache {
     pairs: f64,
     /// Contribution of long range corrections
     pairs_tail: f64,
-    /// Energy of all the bonds in the system
-    bonds: f64,
-    /// Energy of all the angles in the system
-    angles: f64,
-    /// Energy of all the dihedrals angles in the system
-    dihedrals: f64,
+    /// Energy of all the bonds/angles/dihedrals in the system
+    bonded: f64,
     /// Energy of coulombic interactions
     coulomb: f64,
     /// Energy of global interactions
@@ -49,9 +45,7 @@ impl EnergyCache {
             pairs_cache: Array2::zeros((0, 0)),
             pairs: 0.0,
             pairs_tail: 0.0,
-            bonds: 0.0,
-            angles: 0.0,
-            dihedrals: 0.0,
+            bonded: 0.0,
             coulomb: 0.0,
             global: 0.0,
             updater: None,
@@ -63,9 +57,7 @@ impl EnergyCache {
         self.pairs_cache.fill(0.0);
         self.pairs = 0.0;
         self.pairs_tail = 0.0;
-        self.bonds = 0.0;
-        self.angles = 0.0;
-        self.dihedrals = 0.0;
+        self.bonded = 0.0;
         self.coulomb = 0.0;
         self.global = 0.0;
     }
@@ -91,27 +83,14 @@ impl EnergyCache {
         }
 
         self.pairs_tail = evaluator.pairs_tail();
-        self.bonds = evaluator.bonds();
-        self.angles = evaluator.angles();
-        self.dihedrals = evaluator.dihedrals();
+        self.bonded = evaluator.bonded();
         self.coulomb = evaluator.coulomb();
         self.global = evaluator.global();
     }
 
     /// Get the cached energy
     pub fn energy(&self) -> f64 {
-        let mut energy = 0.0;
-        energy += self.pairs;
-        energy += self.pairs_tail;
-
-        energy += self.bonds;
-        energy += self.angles;
-        energy += self.dihedrals;
-
-        energy += self.coulomb;
-        energy += self.global;
-
-        return energy;
+        return self.pairs + self.pairs_tail + self.bonded + self.coulomb + self.global;
     }
 
     /// Update the cache after a call to a `EnergyCache::*_cost` function or

@@ -117,9 +117,7 @@ impl Compute for PotentialEnergy {
 
         let mut energy = evaluator.pairs();
         energy += evaluator.pairs_tail();
-        energy += evaluator.bonds();
-        energy += evaluator.angles();
-        energy += evaluator.dihedrals();
+        energy += evaluator.bonded();
         energy += evaluator.coulomb();
         energy += evaluator.global();
 
