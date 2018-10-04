@@ -572,7 +572,7 @@ impl Ewald {
     /// Real space contribution to the molecular virial
     fn real_space_molecular_virial(&self, configuration: &Configuration) -> Matrix3 {
         let charges = configuration.particles().charge;
-        let virials = configuration.molecules().enumerate().par_bridge().map(|(i, molecule_i)| {
+        let virials = configuration.molecules_par().enumerate().map(|(i, molecule_i)| {
             let mut local_virial = Matrix3::zero();
             let ri = molecule_i.center_of_mass();
 

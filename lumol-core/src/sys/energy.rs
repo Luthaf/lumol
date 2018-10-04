@@ -108,7 +108,7 @@ impl<'a> EnergyEvaluator<'a> {
 
     /// Compute the energy of all the bonds/angles/dihedrals in the system
     pub fn bonded(&self) -> f64 {
-        let energies = self.system.molecules().par_bridge().map(|molecule| {
+        let energies = self.system.molecules_par().map(|molecule| {
             let mut energy = 0.0;
             for bond in molecule.bonds() {
                 let (i, j) = (bond.i(), bond.j());

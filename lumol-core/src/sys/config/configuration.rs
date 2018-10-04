@@ -4,6 +4,9 @@
 use std::cmp::{max, min};
 use std::marker::PhantomData;
 
+use rayon::iter::plumbing;
+use rayon::prelude::*;
+
 use log::trace;
 use log_once::warn_once;
 
@@ -84,7 +87,7 @@ impl Configuration {
         }
     }
 
-    /// Get an iterator over the molecules in the configuration.
+    /// Get a mutable iterator over the molecules in the configuration.
     pub fn molecules_mut(&mut self) -> MoleculeIterMut<'_> {
         let ptr = self.particles.as_mut_ptr();
         let end = unsafe {
@@ -95,6 +98,22 @@ impl Configuration {
             ptr: ptr,
             end: end,
             _marker: PhantomData,
+        }
+    }
+
+    /// Get a parrallel iterator over the molecules in the configuration.
+    pub fn molecules_par(&self) -> MoleculeParIter {
+        MoleculeParIter {
+            bondings: &self.bondings,
+            particles: self.particles.as_slice(),
+        }
+    }
+
+    /// Get a parrallel mutable iterator over the molecules in the configuration.
+    pub fn molecules_par_mut(&mut self) -> MoleculeParIterMut {
+        MoleculeParIterMut {
+            bondings: &self.bondings,
+            particles: self.particles.as_mut_slice(),
         }
     }
 
@@ -462,6 +481,7 @@ pub struct MoleculeIter<'a> {
     _marker: PhantomData<ParticleSlice<'a>>
 }
 
+/// We can send (but not sync!) the iterator to another thread
 unsafe impl<'a> Send for MoleculeIter<'a> {}
 
 impl<'a> Iterator for MoleculeIter<'a> {
@@ -513,6 +533,8 @@ impl<'a> DoubleEndedIterator for MoleculeIter<'a> {
     }
 }
 
+impl<'a> ExactSizeIterator for MoleculeIter<'a> {}
+
 /// A mutable iterator over all the molecules in a `Configuration`
 pub struct MoleculeIterMut<'a> {
     bondings: ::std::slice::Iter<'a, Bonding>,
@@ -521,6 +543,7 @@ pub struct MoleculeIterMut<'a> {
     _marker: PhantomData<ParticleSliceMut<'a>>
 }
 
+/// We can send (but not sync!) the iterator to another thread
 unsafe impl<'a> Send for MoleculeIterMut<'a> {}
 
 impl<'a> Iterator for MoleculeIterMut<'a> {
@@ -572,6 +595,178 @@ impl<'a> DoubleEndedIterator for MoleculeIterMut<'a> {
     }
 }
 
+impl<'a> ExactSizeIterator for MoleculeIterMut<'a> {}
+
+/// A parrallel iterator over all the molecules in a `Configuration`
+pub struct MoleculeParIter<'a> {
+    bondings: &'a [Bonding],
+    particles: ParticleSlice<'a>,
+}
+
+impl<'a> ParallelIterator for MoleculeParIter<'a> {
+    type Item = MoleculeRef<'a>;
+
+    fn drive_unindexed<C>(self, consumer: C) -> C::Result
+        where C: plumbing::UnindexedConsumer<Self::Item>
+    {
+        plumbing::bridge(self, consumer)
+    }
+
+    fn opt_len(&self) -> Option<usize> {
+        Some(self.len())
+    }
+}
+
+impl<'a> IndexedParallelIterator for MoleculeParIter<'a> {
+    fn drive<C>(self, consumer: C) -> C::Result
+        where C: plumbing::Consumer<Self::Item>
+    {
+        plumbing::bridge(self, consumer)
+    }
+
+    fn len(&self) -> usize {
+        self.bondings.len()
+    }
+
+    fn with_producer<CB>(self, callback: CB) -> CB::Output
+        where CB: plumbing::ProducerCallback<Self::Item>
+    {
+        callback.callback(self)
+    }
+}
+
+impl<'a> plumbing::Producer for MoleculeParIter<'a> {
+    type Item = MoleculeRef<'a>;
+    type IntoIter = MoleculeIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        let ptr = self.particles.as_ptr();
+        let end = unsafe {
+            ptr.add(self.particles.len())
+        };
+        MoleculeIter {
+            bondings: self.bondings.iter(),
+            ptr: ptr,
+            end: end,
+            _marker: PhantomData,
+        }
+    }
+
+    fn split_at(self, index: usize) -> (Self, Self) {
+        let (bondings_left, bondings_right) = self.bondings.split_at(index);
+        let count: usize = bondings_left.iter().map(|b| b.size()).sum();
+        let (particles_left, particles_right) = self.particles.split_at(count);
+        let left = MoleculeParIter {
+            bondings: bondings_left,
+            particles: particles_left,
+        };
+        let right = MoleculeParIter {
+            bondings: bondings_right,
+            particles: particles_right,
+        };
+        (left, right)
+    }
+}
+
+/// A mutable parrallel iterator over all the molecules in a `Configuration`
+pub struct MoleculeParIterMut<'a> {
+    bondings: &'a [Bonding],
+    particles: ParticleSliceMut<'a>,
+}
+
+impl<'a> ParallelIterator for MoleculeParIterMut<'a> {
+    type Item = MoleculeRefMut<'a>;
+
+    fn drive_unindexed<C>(self, consumer: C) -> C::Result
+        where C: plumbing::UnindexedConsumer<Self::Item>
+    {
+        plumbing::bridge(self, consumer)
+    }
+
+    fn opt_len(&self) -> Option<usize> {
+        Some(self.len())
+    }
+}
+
+impl<'a> IndexedParallelIterator for MoleculeParIterMut<'a> {
+    fn drive<C>(self, consumer: C) -> C::Result
+        where C: plumbing::Consumer<Self::Item>
+    {
+        plumbing::bridge(self, consumer)
+    }
+
+    fn len(&self) -> usize {
+        self.bondings.len()
+    }
+
+    fn with_producer<CB>(self, callback: CB) -> CB::Output
+        where CB: plumbing::ProducerCallback<Self::Item>
+    {
+        callback.callback(self)
+    }
+}
+
+impl<'a> plumbing::Producer for MoleculeParIterMut<'a> {
+    type Item = MoleculeRefMut<'a>;
+    type IntoIter = MoleculeIterMut<'a>;
+
+    fn into_iter(mut self) -> Self::IntoIter {
+        let ptr = self.particles.as_mut_ptr();
+        let end = unsafe {
+            ptr.add(self.particles.len())
+        };
+        MoleculeIterMut {
+            bondings: self.bondings.iter(),
+            ptr: ptr,
+            end: end,
+            _marker: PhantomData,
+        }
+    }
+
+    fn split_at(self, index: usize) -> (Self, Self) {
+        let (bondings_left, bondings_right) = self.bondings.split_at(index);
+        let count: usize = bondings_left.iter().map(|b| b.size()).sum();
+
+        // FIXME: use self.particles.split_at_mut with a better definition? The
+        // current one fails to compile with `self.particles` does not live long
+        // enough
+        let (ml, mr) = self.particles.mass.split_at_mut(count);
+        let (cl, cr) = self.particles.charge.split_at_mut(count);
+        let (nl, nr) = self.particles.name.split_at_mut(count);
+        let (pl, pr) = self.particles.position.split_at_mut(count);
+        let (vl, vr) = self.particles.velocity.split_at_mut(count);
+        let (kl, kr) = self.particles.kind.split_at_mut(count);
+
+        let (particles_left, particles_right) = (
+            ParticleSliceMut {
+                mass: ml,
+                charge: cl,
+                name: nl,
+                position: pl,
+                velocity: vl,
+                kind: kl,
+            },
+            ParticleSliceMut {
+                mass: mr,
+                charge: cr,
+                name: nr,
+                position: pr,
+                velocity: vr,
+                kind: kr,
+            },
+        );
+
+        let left = MoleculeParIterMut {
+            bondings: bondings_left,
+            particles: particles_left,
+        };
+        let right = MoleculeParIterMut {
+            bondings: bondings_right,
+            particles: particles_right,
+        };
+        (left, right)
+    }
+}
 
 #[cfg(test)]
 mod tests {

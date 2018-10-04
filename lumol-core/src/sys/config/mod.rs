@@ -32,3 +32,4 @@ mod configuration;
 pub use self::configuration::Configuration;
 pub use self::configuration::Permutation;
 pub use self::configuration::{MoleculeIter, MoleculeIterMut};
+pub use self::configuration::{MoleculeParIter, MoleculeParIterMut};

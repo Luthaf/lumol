@@ -54,7 +54,7 @@ impl Compute for Forces {
             forces[i] += force_i;
         });
 
-        system.molecules().par_bridge().for_each(|molecule| {
+        system.molecules_par().for_each(|molecule| {
             let mut forces = thread_local_forces.borrow_mut();
             for bond in molecule.bonds() {
                 let (i, j) = (bond.i(), bond.j());
@@ -282,7 +282,7 @@ impl Compute for MolecularVirial {
 
         // Pair potentials contributions, using the molecular virial definition
         // This is defined in Allen & Tildesley in equations 2.54; 2.61; 2.63.
-        let pair_virials = system.molecules().enumerate().par_bridge().map(|(i, molecule_i)| {
+        let pair_virials = system.molecules_par().enumerate().map(|(i, molecule_i)| {
             let mut local_virial = Matrix3::zero();
             let ri = molecule_i.center_of_mass();
 
