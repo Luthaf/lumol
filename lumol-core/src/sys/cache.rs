@@ -9,8 +9,11 @@
 //! energy components, by storing them and providing update callbacks.
 use std::mem;
 
+use rayon::prelude::*;
+
 use crate::System;
 use crate::{Array2, Vector3D};
+use crate::utils::ThreadLocalArray2;
 
 /// Callback for updating a cache. It also take an `&mut System` argument for
 /// updating the cache inside the global potentials.
@@ -67,18 +70,28 @@ impl EnergyCache {
     /// the associated system, one must call this function again.
     pub fn init(&mut self, system: &System) {
         self.clear();
-        self.pairs_cache.resize_if_different((system.size(), system.size()));
+        let natoms = system.size();
+        self.pairs_cache.resize_if_different((natoms, natoms));
+
+        let thread_local_pairs = ThreadLocalArray2::with_size((natoms, natoms));
 
         let evaluator = system.energy_evaluator();
-
-        for i in 0..system.size() {
+        (0..natoms).into_par_iter().for_each(|i| {
+            let mut pairs = thread_local_pairs.borrow_mut();
             for j in (i + 1)..system.size() {
                 let r = system.nearest_image(i, j).norm();
                 let path = system.bond_path(i, j);
                 let energy = evaluator.pair(path, r, i, j);
-                self.pairs_cache[(i, j)] = energy;
-                self.pairs_cache[(j, i)] = energy;
-                self.pairs += energy;
+                pairs[(i, j)] = energy;
+                pairs[(j, i)] = energy;
+            }
+        });
+
+        thread_local_pairs.sum_into(&mut self.pairs_cache);
+        for i in 0..natoms {
+            for j in (i + 1)..natoms {
+                self.pairs_cache[(j, i)] = self.pairs_cache[(i, j)];
+                self.pairs += self.pairs_cache[(i, j)];
             }
         }
 

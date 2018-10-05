@@ -38,9 +38,11 @@ impl<T: Zero + Clone> Array2<T> {
     pub fn zeros(size: (usize, usize)) -> Array2<T> {
         Array2(ndarray::Array2::zeros(size))
     }
+}
 
+impl<T: Default> Array2<T> {
     /// Resize the array if the current size is not `size`, and fill the
-    /// new array with zeros.
+    /// new array with default values.
     ///
     /// # Examples
     ///
@@ -60,7 +62,7 @@ impl<T: Zero + Clone> Array2<T> {
     /// ```
     pub fn resize_if_different(&mut self, size: (usize, usize)) {
         if self.dim() != size {
-            *self = Array2::zeros(size);
+            *self = Array2::default(size);
         }
     }
 }

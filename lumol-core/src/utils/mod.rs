@@ -9,6 +9,9 @@ mod macros;
 mod thread_vec;
 pub use self::thread_vec::ThreadLocalVec;
 
+mod thread_array;
+pub use self::thread_array::ThreadLocalArray2;
+
 #[cfg(test)]
 mod xyz;
 #[cfg(test)]
