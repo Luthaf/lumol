@@ -45,7 +45,7 @@ pub fn testing_system() -> System {
         k: units::from(300.0, "kJ/mol/A^2").unwrap(),
         x0: units::from(1.2, "A").unwrap(),
     });
-    system.add_pair_potential(("F", "F"), PairInteraction::new(harmonic, 5.0));
+    system.set_pair_potential(("F", "F"), PairInteraction::new(harmonic, 5.0));
     system.step = 42;
     return system;
 }
@@ -55,6 +55,6 @@ fn check_file_content(mut file: File, content: &str) {
     let _ = file.read_to_string(&mut buffer).unwrap();
 
     for (l1, l2) in buffer.lines().zip(content.lines()) {
-        assert_eq!(l1, l2.trim_left());
+        assert_eq!(l1, l2.trim_start());
     }
 }
