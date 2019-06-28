@@ -255,3 +255,7 @@ pub use self::global::{Ewald, SharedEwald, Wolf};
 
 mod pairs;
 pub use self::pairs::PairInteraction;
+
+mod overlay;
+pub use self::overlay::{PairPotentialOverlay, BondPotentialOverlay};
+pub use self::overlay::{AnglePotentialOverlay, DihedralPotentialOverlay};
